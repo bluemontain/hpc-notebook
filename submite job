@@ -1,0 +1,76 @@
+sbatch 命令允许将设定好的参数脚本，分配至相应的计算作业节点，其使用方法简要介绍如下：
+
+1、
+#!/bin/bash
+#SBATCH -o joblog.j-%.log
+#SBATCH -p nameofp
+#SBATCH --qos=low
+#SBATCH -J nameofjob
+#SBATCH --nodes=1 
+#SBATCH --ntasks-per-node=1
+#SBATCH --partition=GPU      
+#SBATCH --gres=gpu:1        
+
+python yourworkproject.py
+
+
+假设上面作业脚本的文件名为yourjobname.sh，通过以下命令提交：
+sbatch yourjobname.sh
+
+-o joblog.j-%.log       # 脚本执行的输出将被保存在当joblog.j-%.log文件下，%j为运行时作业号;
+-p nameofp              # 作业提交的指定分区为nameofp
+--qos=low               # 指定作业的QOS为low;
+-J nameofjob            # 作业在调度系统中的作业名为nameofjob;
+--nodes=1               # 申请节点数为1,如果作业不能跨节点(MPI)运行, 申请的节点数应不超过1;
+--ntasks-per-node=1     # 每个节点上运行一个任务，默认一情况下也可理解为每个节点使用一个核心，如果程序不支持多线程(如openmp)，这个数不应该超过1；
+python yourworkproject.py  # 任何你希望执行的作业，可以是脚本，c，python任何计算内容。
+
+sacctmgr show ass user=`whoami` format=part |uniq  # 通过以下命令可以查看对应集群可用分区，也可以通过sinfo查看分区的空闲状态
+
+sacctmgr show ass user=`whoami`  format=user,part,qos
+--qos 指定作业的服务质量 ，不同qos，作业排队的优先级和收费也不同，通过以下命令可以查询 每个用户在每个分区下可用的qos；
+通过以上命令可以查看不同qos的作业优先级、作业允许最大运行时间、每个用户最多可提交作业数、最多可用核心数。
+
+一些常见参数属下
+--help    # 显示帮助信息；
+-A <account>    # 指定计费账户；
+-D, --chdir=<directory>      # 指定工作目录；
+--get-user-env    # 获取当前的环境变量；
+--gres=<list>    # 使用gpu这类资源，如申请两块gpu则--gres=gpu:2
+-J, --job-name=<jobname>    # 指定该作业的作业名；
+--mail-type=<type>    # 指定状态发生时，发送邮件通知，有效种类为（NONE, BEGIN, END, FAIL, REQUEUE, ALL）；
+--mail-user=<user>    # 发送给指定邮箱；
+-n, --ntasks=<number>    # sbatch并不会执行任务，当需要申请相应的资源来运行脚本，默认情况下一个任务一个核心，--cpus-per-task参数可以修改该默认值；
+-c, --cpus-per-task=<ncpus>      # 每个任务所需要的核心数，默认为1；
+--ntasks-per-node=<ntasks>    # 每个节点的任务数，--ntasks参数的优先级高于该参数，如果使用--ntasks这个参数，那么将会变为每个节点最多运行的任务数；
+-o, --output=<filename pattern>    # 输出文件，作业脚本中的输出将会输出到该文件；
+-p, --partition=<partition_names>    # 将作业提交到对应分区；
+-q, --qos=<qos>    # 指定QOS；
+-t, --time=<time>    # 允许作业运行的最大时间，目前未名一号和生科一号为5天，教学一号为两天；
+-w, --nodelist=<node name list>  # 指定申请的节点；
+-x, --exclude=<node name list>   # 排除指定的节点；
+
+
+
+最后是一个跨节点多核心的例子；
+假设我们想用两个节点，每个节点32个核心来运行vasp，那么可以这么编写作业脚本；
+
+#!/bin/bash
+#SBATCH -o job.%j.out
+#SBATCH --partition=可选择的分区
+#SBATCH --qos=low
+#SBATCH -J yourMPIJob
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=32
+
+# 导入MPI运行环境
+module load intel/2017.1
+
+# 导入MPI应用程序
+module load vasp/5.4.4-intel-2017.1
+
+# 生成 machinefile
+srun hostname -s | sort -n >slurm.hosts
+
+# 执行MPI并行计算程序
+mpirun -n 64 -machinefile slurm.hosts vasp_std > log
